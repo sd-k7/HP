@@ -38,7 +38,7 @@ export const useAttendance = () => {
       
       // Determine status based on time (9 AM = late)
       const hour = now.getHours();
-      const status = hour >= 9 && now.getMinutes() > 15 ? 'late' : 'present';
+      const status = hour >= 9 ? 'late' : 'present';
 
       const { error } = await supabase
         .from('attendance')
