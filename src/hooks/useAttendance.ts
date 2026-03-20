@@ -27,48 +27,56 @@ export const useAttendance = () => {
     }
   };
 
-  const markAttendance = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+const markAttendance = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const checkInTime = now.toISOString();
-      
-      // Determine status based on time (9 AM = late)
-      const hour = now.getHours();
-      const status = hour >= 9 ? 'late' : 'present';
+    const now = new Date();
 
-      const { error } = await supabase
-        .from('attendance')
-        .upsert({
-          user_id: user.id,
-          date: today,
-          check_in: checkInTime,
-          status,
-        }, {
-          onConflict: 'user_id,date'
-        });
+    // ✅ Use local date instead of UTC
+    const today = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-      if (error) throw error;
-      
-      // Log activity
-      await supabase
-        .from('activity_logs')
-        .insert({
-          user_id: user.id,
-          action: 'Mark Attendance',
-          details: `Marked attendance as ${status} at ${now.toLocaleTimeString()}`,
-        });
+    const checkInTime = now.toISOString();
 
-      await fetchAttendance();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to mark attendance' };
-    }
-  };
+    // ✅ Proper late logic (after 9:15 AM)
+    const cutoff = new Date();
+    cutoff.setHours(9, 15, 0, 0);
 
+    const status = now > cutoff ? 'late' : 'present';
+
+    const { error } = await supabase
+      .from('attendance')
+      .upsert({
+        user_id: user.id,
+        date: today,
+        check_in: checkInTime,
+        status,
+      }, {
+        onConflict: 'user_id,date'
+      });
+
+    if (error) throw error;
+
+    // Log activity
+    await supabase
+      .from('activity_logs')
+      .insert({
+        user_id: user.id,
+        action: 'Mark Attendance',
+        details: `Marked attendance as ${status} at ${now.toLocaleTimeString()}`,
+      });
+
+    await fetchAttendance();
+    return { success: true };
+
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to mark attendance'
+    };
+  }
+};
   const checkOut = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
